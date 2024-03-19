@@ -1,0 +1,91 @@
+https://www.markdownguide.org/cheat-sheet/#basic-syntaIf you're constrained to using Databricks Workflows and cannot use Jobs directly, and you need to trigger a workflow based on events like file uploads to Azure Data Lake Storage Gen2, using Azure Functions is a practical approach. Azure Functions can monitor events in your ADLS Gen2 container and trigger Databricks workflows using the Databricks REST API. Below is a step-by-step guide to creating an Azure Function for this purpose:
+
+Step 1: Create an Azure Function App
+Log in to the Azure Portal: Go to https://portal.azure.com and log in with your Azure account.
+Create a new Function App:
+Select "Create a resource" > "Compute" > "Function App".
+Fill in the necessary details:
+Subscription: Choose your Azure subscription.
+Resource Group: Select an existing resource group or create a new one.
+Function App name: Enter a unique name for your function app.
+Publish: Choose "Code".
+Runtime stack: Select your preferred runtime, such as Python.
+Version: Choose the appropriate version for your runtime.
+Region: Select a region close to your services.
+Click "Review + create" and then "Create" after reviewing the details.
+Step 2: Create a Function in the Function App
+Once your Function App is deployed:
+
+Go to your Function App in the Azure Portal.
+Click on "Functions" from the left sidebar and then click "Add".
+Choose a trigger; since you want to respond to new files in ADLS Gen2, you can use the "Azure Blob Storage trigger".
+Fill in the details for the new function:
+Name: Provide a name for your function.
+Path: Specify the path in the blob storage that you want to monitor (e.g., samples-workitems/{name}).
+Connection: Create a new connection or use an existing one to your ADLS Gen2 account.
+
+Step 3: Implement the Function
+In the Function Editor:
+
+Write your function code to trigger a Databricks workflow. The function will be triggered each time a new file is uploaded to the specified path in your ADLS Gen2 container.
+Here's an example in Python of how you might set it up:
+
+
+import logging
+import azure.functions as func
+import requests
+
+def main(blob: func.InputStream):
+    logging.info(f"Python Blob trigger function processed blob \n"
+                 f"Name: {blob.name}\n"
+                 f"Blob Size: {blob.length} bytes")
+
+    # Extract file name
+    file_name = blob.name.split('/')[-1]
+
+    # Setup the Databricks API URL
+    databricks_instance = "https://<databricks-instance>"
+    token = "<databricks-token>"
+    workspace_id = "<workspace-id>"
+    notebook_path = "<notebook-path>"
+
+    url = f"{databricks_instance}/api/2.0/jobs/runs/submit"
+
+    # Prepare the payload
+    payload = {
+        "run_name": "Triggered by Azure Function",
+        "existing_cluster_id": "<cluster-id>",
+        "notebook_task": {
+            "notebook_path": notebook_path,
+            "base_parameters": {
+                "file_name": file_name
+            }
+        }
+    }
+
+    # Headers
+    headers = {
+        'Authorization': f'Bearer {token}',
+        'Content-Type': 'application/json'
+    }
+
+    # Trigger Databricks notebook
+    response = requests.post(url, json=payload, headers=headers)
+
+    if response.status_code == 200:
+        logging.info("Databricks workflow triggered successfully.")
+    else:
+        logging.error("Failed to trigger Databricks workflow.")
+
+
+Make sure to replace <databricks-instance>, <databricks-token>, <workspace-id>, <notebook-path>, and <cluster-id> with your actual Databricks workspace details.
+
+
+Step 4: Deploy and Test Your Function
+Save your function code in the Azure Function editor.
+Test the function by uploading a file to the specified path in your ADLS Gen2 container.
+Monitor the logs in the Azure Function to ensure it's triggered and executes as expected.
+Step 5: Monitor and Maintain
+Use the Azure Portal to monitor the execution of your Azure Function, viewing logs and metrics to ensure it's operating as expected.
+Update your function code and Databricks workflows as needed to accommodate changes in your processing logic or data structures.
+By following these steps, you can automate the triggering of Databricks workflows based on file uploads to ADLS Gen2 using Azure Functions, even if Databricks Jobs are not an option for you.
